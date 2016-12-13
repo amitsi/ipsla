@@ -12,26 +12,31 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 default_yml_file="ping-type:vrouter
-no_of_links:2
+no_of_links:3
 switch_host:auto-spine1
 switch_username:network-admin
 switch_password:test123
-LinkTrackIP1:172.168.0.10
+LinkTrackIP1:172.168.0.2
+-vrouter-name:o-spine1-vrouter
+-network:172.168.0.0
+-netmask:255.255.255.252
+-gateway:172.168.0.1
+LinkTrackIP2:172.168.0.10
 -vrouter-name:o-spine1-vrouter
 -network:172.168.0.8
 -netmask:255.255.255.252
 -gateway:172.168.0.9
-LinkTrackIP2:172.168.0.6
--vrouter-name:o-spine2-vrouter
+LinkTrackIP3:172.168.0.6
+-vrouter-name:o-spine1-vrouter
 -network:172.168.0.4
 -netmask:255.255.255.252
 -gateway:172.168.0.5
 distance:100
 emailId:testipsla@gmail.com
 emailPassword:testipsla123
-emailContent1:Link first is down
-emailContent2:Link first is up
-sysadmin:sdivekar@pluribusnetworks.com
+emailContent1:Link is Down with for Address
+emailContent2:Rolling back. Link is up for Address
+sysadmin:sandip.divekar@calsoftinc.com
 ping_timer:3
 allowed_failure:2
 "
@@ -101,22 +106,24 @@ create_static_route()
 
 delete_static_route()
 {
-  echo "Deleting static route for network: ${networks[$index]}"
   index=$1
+  echo "Deleting static route for network: ${networks[$index]}"
   cli --user $switch_username:$switch_password --quiet --host $switch_host vrouter-static-route-remove vrouter-name ${vrouters[$index]} network ${networks[$index]} netmask ${netmasks[$index]} gateway-ip ${gateways[$index]}
 }
+
+stop_exit=0
+reset=5
 
 linux_ping_host()
 {
   index=$1
   ping_failure=0
-  while [ "$ping_failure" -le "$allowed_failure" ]; 
+  reset=0
+  while [ "$ping_failure" -ne "$allowed_failure" ]; 
   do
     index_for_old_link_check=$index
     echo "Pinging host - ${hosts[$index]}"
-    #count=`cli --user $switch_username:$switch_password --quiet --host $switch_host vrouter-ping vrouter-name ${vrouters[$index]} host-ip ${hosts[$index]} count 1 | grep 'Destination Host Unreachable' | wc -l`
-    ping -c 1 ${hosts[$index]} > /dev/null
-    count=$?
+    count=`cli --user $switch_username:$switch_password --quiet --host $switch_host vrouter-ping vrouter-name ${vrouters[$index]} host-ip ${hosts[$index]} count 1 | grep -E 'Unreachable|unreachable|unknown|not' | wc -l`
     if ! [ $count == 0 ];
     then   
       ping_failure=$((ping_failure+1))
@@ -125,9 +132,8 @@ linux_ping_host()
     for((;$index_for_old_link_check>0;))
     do
       index_for_old_link_check=$((index_for_old_link_check-1))
-      #count=`cli --user $switch_username:$switch_password --quiet --host $switch_host vrouter-ping vrouter-name ${vrouters[$index_for_old_link_check]} host-ip ${hosts[$index_for_old_link_check]} count 1 | grep 'Destination Host Unreachable' | wc -l`
-      ping -c 1 ${hosts[$index_for_old_link_check]} > /dev/null
-      count=$?
+      count=`cli --user $switch_username:$switch_password --quiet --host $switch_host vrouter-ping vrouter-name ${vrouters[$index_for_old_link_check]} host-ip ${hosts[$index_for_old_link_check]} count 1 | grep -E 'Unreachable|unreachable|unknown|not' | wc -l`
+
       if [ $count == 0 ];
       then
         diff=`expr $index - $index_for_old_link_check`
@@ -137,15 +143,21 @@ linux_ping_host()
           delete_static_route $j
           j=$((j-1))
         done
-        break
+        stop_exit=$index_for_old_link_check
+        reset=1
+        echo "$emailContent2 : ${hosts[$index_for_old_link_check]}" | mail -s "Link ${hosts[$index_for_old_link_check]} is down" $sysadmin
+        return 0
       fi
+
     done
     
     echo "Sleeping for 3 seconds"
     sleep $ping_timer    
   done
   echo "Host ${hosts[$index]} is down. Sending Email"
-  #echo "$emailContent1" | mail -s "Link ${hosts[$index]} is down" $sysadmin
+  echo "$emailContent1 : ${hosts[$index]}" | mail -s "Link ${hosts[$index]} is down" $sysadmin
+  stop_exit=$index
+  reset=0
 }
 
 install_ssmtp()
@@ -195,16 +207,27 @@ fi
 
 #install_ssmtp
 
-for((i=1;i<=$links;i++))
+i=1
+for((;i<=$links;i++))
 do
   index=$(($i-1))
   linux_ping_host $index
+  temp=$stop_exit
+  if [ $reset == 1  ];
+  then   
+    i=$temp
+  fi
+
   if [ $i == $links ];
   then
     echo "All links are down exiting from Script"
     exit 0
   else
-    create_static_route $i
+    if [ $reset != 1 ];
+    then
+      j=$(($temp+1))
+      create_static_route $j
+    fi
   fi
-done
 
+done

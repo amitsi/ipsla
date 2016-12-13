@@ -1,0 +1,28 @@
+ping-type:vrouter
+no_of_links:3
+switch_host:auto-spine1
+switch_username:network-admin
+switch_password:test123
+LinkTrackIP1:172.168.0.2
+-vrouter-name:o-spine1-vrouter
+-network:172.168.0.0
+-netmask:255.255.255.252
+-gateway:172.168.0.1
+LinkTrackIP2:172.168.0.10
+-vrouter-name:o-spine1-vrouter
+-network:172.168.0.8
+-netmask:255.255.255.252
+-gateway:172.168.0.9
+LinkTrackIP3:172.168.0.6
+-vrouter-name:o-spine1-vrouter
+-network:172.168.0.4
+-netmask:255.255.255.252
+-gateway:172.168.0.5
+distance:100
+emailId:testipsla@gmail.com
+emailPassword:testipsla123
+emailContent1:Link is Down with for Address
+emailContent2:Rolling back. Link is up for Address
+sysadmin:sandip.divekar@calsoftinc.com
+ping_timer:3
+allowed_failure:2
