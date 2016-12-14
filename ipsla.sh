@@ -1,12 +1,16 @@
 #!/bin/bash
 
+if [[ $( uname -s ) = "SunOS" ]]; then
+	GREP="ggrep"
+else
+	GREP="grep"
+fi
+
 function error() {
   echo -e "\e[0;33mERROR: The IPSLA script failed while running the command $BASH_COMMAND at line $BASH_LINENO.\e[0m" >&2
   exit 1
 }
 trap error ERR
-
-ymlfile=$2
 
 RED='\033[0;31m'
 NC='\033[0m'
@@ -41,36 +45,76 @@ ping_timer:3
 allowed_failure:2
 "
 
-help="
-IPSLA Script will monitor connection links for its availability. If primary link is down it will create backup static link until primary link comes up.
+print_help()
+{
+	printf "  IPSLA Script will monitor connection links for its\n"
+	printf "  availability. If primary link is down, it will create\n"
+	printf "  backup static link, until primary link comes up again.\n\n"
 
+	printf "  Usage: ipsla [OPTIONS]\n\n"
+	printf "  OPTIONS:\n"
+	printf "      -f        Read YML file as input. This should contain\n"
+	printf "                details of links to track, host from which\n"
+	printf "                to track, email settings and other configurations\n"
+	printf "      -h        Print this help\n"
+}
 
-${RED}USAGE: bash ipsla.sh [-h/-help] [-yml] ${NC}
+generate_yml()
+{
+	choice="n"
+	printf "Please provide YML file as an argument : ${RED}${0##*/} -f <filename.yml>${NC}\n\n"
+	printf "Do you want to generate sample YML file in /tmp/file.yml\n"
+	printf "as a example. ${RED}(y/n):${NC}"
+	read choice
+	if [ $choice == "y" ]; then
+		echo "$default_yml_file" > /tmp/file.yml
+		printf "\n#####Sample YML file is created in /tmp/file.yml######\n"
+		printf "\n${RED}$default_yml_file${NC}\n\n"
+	fi
+	exit 0
+}
 
-   -h or -help:
-       Display brief usage message.
+if [[ ! $@ =~ ^\-.+ ]]
+then
+	generate_yml
+fi
+while getopts ":f:h:" opt; do
+	case $opt in
+	f)
+		if [ ! -f $OPTARG ]; then
+			echo "$OPTARG does not exist !"
+			exit 1
+		fi
+		ymlfile=$OPTARG
+	;;
+	h)
+		print_help
+		exit 0
+	;;
+	\?)
+		echo "Invalid option: -$OPTARG" >&2
+		print_help
+		exit 1
+	;;
+	:)
+		print_help
+		exit 1
+	;;
+	esac
+done
 
-   -yml:
-       reads yml file as input. yml file has host1 and host2 details, email account details etc. Please check below exmaple of yml file.
+# Get input details from YML file
 
-${RED}How to RUN:${NC}
+ping_timer=`cat $ymlfile | $GREP 'ping_timer' | cut -d : -f2`
+allowed_failure=`cat $ymlfile | $GREP 'allowed_failure' | cut -d : -f2`
+emailContent1=`cat $ymlfile | $GREP 'emailContent1' | cut -d : -f2`
+emailContent2=`cat $ymlfile | $GREP 'emailContent2' | cut -d : -f2`
+sysadmin=`cat $ymlfile | $GREP 'sysadmin' | cut -d : -f2`
+switch_host=`cat $ymlfile | $GREP 'switch_host' | cut -d : -f2`
+switch_username=`cat $ymlfile | $GREP 'switch_username' | cut -d : -f2`
+switch_password=`cat $ymlfile | $GREP 'switch_password' | cut -d : -f2`
 
-   bash ipsla.sh -yml filename.yml
-
-${RED}=> Contents of filename.yml:${NC}
-$default_yml_file
-
-"
-ping_timer=`cat $ymlfile | grep 'ping_timer' | cut -d : -f2`
-allowed_failure=`cat $ymlfile | grep 'allowed_failure' | cut -d : -f2`
-emailContent1=`cat $ymlfile | grep 'emailContent1' | cut -d : -f2`
-emailContent2=`cat $ymlfile | grep 'emailContent2' | cut -d : -f2`
-sysadmin=`cat $ymlfile | grep 'sysadmin' | cut -d : -f2`
-switch_host=`cat $ymlfile | grep 'switch_host' | cut -d : -f2`
-switch_username=`cat $ymlfile | grep 'switch_username' | cut -d : -f2`
-switch_password=`cat $ymlfile | grep 'switch_password' | cut -d : -f2`
-
-links=`cat $ymlfile | grep 'no_of_links' | cut -d : -f2`
+links=`cat $ymlfile | $GREP 'no_of_links' | cut -d : -f2`
 
 i=1
 
@@ -82,18 +126,18 @@ gateways=()
 
 for((i=1;i<=$links;i++))
 do
-  hostname=`cat $ymlfile | grep "LinkTrackIP$i" | cut -d : -f2`
-  vrouter=`cat $ymlfile | grep -A 4 "LinkTrackIP$i" | grep "vrouter-name" | cut -d : -f2`
-  network=`cat $ymlfile | grep -A 4 "LinkTrackIP$i" | grep "network" | cut -d : -f2`
-  netmask=`cat $ymlfile | grep -A 4 "LinkTrackIP$i" | grep "netmask" | cut -d : -f2`
-  gateway=`cat $ymlfile | grep -A 4 "LinkTrackIP$i" | grep "gateway" | cut -d : -f2`
+  hostname=`cat $ymlfile | $GREP "LinkTrackIP$i" | cut -d : -f2`
+  vrouter=`cat $ymlfile | $GREP -A 4 "LinkTrackIP$i" | $GREP "vrouter-name" | cut -d : -f2`
+  network=`cat $ymlfile | $GREP -A 4 "LinkTrackIP$i" | $GREP "network" | cut -d : -f2`
+  netmask=`cat $ymlfile | $GREP -A 4 "LinkTrackIP$i" | $GREP "netmask" | cut -d : -f2`
+  gateway=`cat $ymlfile | $GREP -A 4 "LinkTrackIP$i" | $GREP "gateway" | cut -d : -f2`
   hosts+=($hostname)
   vrouters+=($vrouter)
   networks+=($network)
   netmasks+=($netmask)
   gateways+=($gateway) 
 done
-distance=`cat $ymlfile | grep 'distance' | cut -d : -f2`
+distance=`cat $ymlfile | $GREP 'distance' | cut -d : -f2`
 
 
 create_static_route()
@@ -114,25 +158,25 @@ delete_static_route()
 stop_exit=0
 reset=5
 
-linux_ping_host()
+ping_host()
 {
   index=$1
   ping_failure=0
   reset=0
-  while [ "$ping_failure" -ne "$allowed_failure" ]; 
+  while [ "$ping_failure" -ne "$allowed_failure" ];
   do
     index_for_old_link_check=$index
     echo "Pinging host - ${hosts[$index]}"
-    count=`cli --user $switch_username:$switch_password --quiet --host $switch_host vrouter-ping vrouter-name ${vrouters[$index]} host-ip ${hosts[$index]} count 1 | grep -E 'Unreachable|unreachable|unknown|not' | wc -l`
+    count=`cli --user $switch_username:$switch_password --quiet --host $switch_host vrouter-ping vrouter-name ${vrouters[$index]} host-ip ${hosts[$index]} count 1 | $GREP -E 'Unreachable|unreachable|unknown|not' | wc -l`
     if ! [ $count == 0 ];
-    then   
+    then
       ping_failure=$((ping_failure+1))
-      echo "Host is unrechable:${hosts[$index]}" 
+      echo "Host is unrechable:${hosts[$index]}"
     fi
     for((;$index_for_old_link_check>0;))
     do
       index_for_old_link_check=$((index_for_old_link_check-1))
-      count=`cli --user $switch_username:$switch_password --quiet --host $switch_host vrouter-ping vrouter-name ${vrouters[$index_for_old_link_check]} host-ip ${hosts[$index_for_old_link_check]} count 1 | grep -E 'Unreachable|unreachable|unknown|not' | wc -l`
+      count=`cli --user $switch_username:$switch_password --quiet --host $switch_host vrouter-ping vrouter-name ${vrouters[$index_for_old_link_check]} host-ip ${hosts[$index_for_old_link_check]} count 1 | $GREP -E 'Unreachable|unreachable|unknown|not' | wc -l`
 
       if [ $count == 0 ];
       then
@@ -150,9 +194,9 @@ linux_ping_host()
       fi
 
     done
-    
+
     echo "Sleeping for 3 seconds"
-    sleep $ping_timer    
+    sleep $ping_timer
   done
   echo "Host ${hosts[$index]} is down. Sending Email"
   echo "$emailContent1 : ${hosts[$index]}" | mail -s "Link ${hosts[$index]} is down" $sysadmin
@@ -160,17 +204,18 @@ linux_ping_host()
   reset=0
 }
 
+#install_ssmtp
+
 install_ssmtp()
 {
   sudo apt-get -y -qq update
   sudo apt-get -y -qq autoremove sendmail
   sudo apt-get -y -qq install ssmtp
   sudo apt-get -y -qq install mailutils
-  emailid=`cat $ymlfile | grep 'emailId' | cut -d : -f2`
-  emailPassword=`cat $ymlfile | grep 'emailPassword' | cut -d : -f2`
-  count=`cat /etc/ssmtp/ssmtp.conf | grep '##EMAIL CONF##' | wc -l`
-  if [ $count == "0" ];
-  then
+  emailid=`cat $ymlfile | $GREP 'emailId' | cut -d : -f2`
+  emailPassword=`cat $ymlfile | $GREP 'emailPassword' | cut -d : -f2`
+  count=`cat /etc/ssmtp/ssmtp.conf | $GREP '##EMAIL CONF##' | wc -l`
+  if [ $count == "0" ]; then
   echo "##EMAIL CONF##
 AuthUser=$emailid
 AuthPass=$emailPassword
@@ -180,41 +225,14 @@ UseSTARTTLS=YES" >> /etc/ssmtp/ssmtp.conf
   fi
 }
 
-
-###Script Starts here###
-if [ "$1" = '-h' ] || [ "$1" = '-help' ]; then
-  echo -e "\n\e[0;31m[IP SLA] \e[0m"
-  printf "$help"
-  exit 0
-fi
-
-choice="n"
-
-if ! [[ "$@" == *"-yml"* ]]
-then
-  printf "\nScript requires .yml file as argument. Please provide yml file as an argument : ${RED}bash ${0##*/} -yml filename.yml${NC}\n\n"
-  printf "Shall I generate sample yml file in /tmp/file.yml as a exmaple. ${RED}(y/n):${NC}"
-  read choice
-  if [ $choice == "y" ];
-  then
-    echo "$default_yml_file" > /tmp/file.yml
-    printf "\n#####Sample yml file is created in /tmp/file.conf with following contents######\n"
-    printf "\n${RED}$default_yml_file${NC}\n\n"
-  fi
-  exit 0
-fi
-
-
-#install_ssmtp
-
 i=1
 for((;i<=$links;i++))
 do
   index=$(($i-1))
-  linux_ping_host $index
+  ping_host $index
   temp=$stop_exit
   if [ $reset == 1  ];
-  then   
+  then
     i=$temp
   fi
 
@@ -231,3 +249,4 @@ do
   fi
 
 done
+
