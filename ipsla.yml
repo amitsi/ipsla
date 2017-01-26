@@ -1,28 +1,28 @@
-ping-type:vrouter
-no_of_links:3
-switch_host:auto-spine1
-switch_username:network-admin
-switch_password:test123
-LinkTrackIP1:172.168.0.2
--vrouter-name:o-spine1-vrouter
--network:172.168.0.0
--netmask:255.255.255.252
--gateway:172.168.0.1
-LinkTrackIP2:172.168.0.10
--vrouter-name:o-spine1-vrouter
--network:172.168.0.8
--netmask:255.255.255.252
--gateway:172.168.0.9
-LinkTrackIP3:172.168.0.6
--vrouter-name:o-spine1-vrouter
--network:172.168.0.4
--netmask:255.255.255.252
--gateway:172.168.0.5
-distance:100
-emailId:testipsla@gmail.com
-emailPassword:testipsla123
-emailContent1:Link is Down with for Address
-emailContent2:Rolling back. Link is up for Address
-sysadmin:sandip.divekar@calsoftinc.com
+LinkTrackIP1:10.10.10.100
+-switch_host:aquila-ext-43
+-switch_username:network-admin
+-switch_password:test123
+-vrouter_name:test-vr
+-network:10.10.10.0
+-netmask:255.255.255.0
+-gateway:10.10.10.1
+-distance:100
+-custom_message:This is the link to US DC
+LinkTrackIP2:11.11.11.100
+-switch_host:aquila-ext-43
+-switch_username:network-admin
+-switch_password:test123
+-vrouter_name:test-vr
+-network:11.11.11.0
+-netmask:255.255.255.0
+-gateway:11.11.11.1
+-distance:100
+-custom_message:This is the link to Germany DC
+email_id:YOUR-EMAIL-ADDRESS
+email_password:YOUR-EMAIL-PASSWORD
+link_down_message:Link is not reachable
+link_up_message:Link is back up
+sysadmin:ashish@pluribusnetworks.com
 ping_timer:3
-allowed_failure:2
+failure_threshold:2
+keep_backup_route:false
